@@ -153,11 +153,27 @@ def processar_arquivo(caminho_arquivo):
         "status": status,
     })
 
-  col_pub_intimacao = 2
-  col_pub_proc = 4
-  col_pub_classificacao = 5
-  col_pub_area = 6
-  col_pub_diagnostico = 7
+  # Mapear Publicações pelos cabeçalhos (com fallback para o layout atual,
+  # caso alguma coluna seja renomeada ou o cabeçalho não seja encontrado)
+  pub_headers = {
+      str(ws_proc.cell(row=1, column=c).value).strip().upper(): c
+      for c in range(1, ws_proc.max_column + 1)
+  }
+  col_pub_intimacao = pub_headers.get("INTIMAÇÃO", 2)
+  col_pub_proc = pub_headers.get("PROCESSO", 4)
+  col_pub_classificacao = pub_headers.get("CLASSIFICAÇÃO", 5)
+  col_pub_area = pub_headers.get("ÁREA", 6)
+  col_pub_diagnostico = pub_headers.get("DIAGNÓSTICO", 7)
+
+  headers_esperados = ["INTIMAÇÃO", "PROCESSO", "CLASSIFICAÇÃO", "ÁREA", "DIAGNÓSTICO"]
+  headers_faltando = [h for h in headers_esperados if h not in pub_headers]
+  if headers_faltando:
+    print(
+        f"{VERMELHO_THONON}Aviso: cabeçalho(s) não encontrado(s) em "
+        f"'{nome_pub}': {headers_faltando} — usando posição padrão, "
+        f"CONFIRA o resultado.{RESET}"
+    )
+
   fill_duplicado = PatternFill(
       start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
   )
@@ -190,7 +206,8 @@ def processar_arquivo(caminho_arquivo):
         calcular_similaridade_palavras(corpo_pub, ant) >= LIMITE_SIMILARIDADE
         for ant in textos_processados_pub
     ):
-      ws_proc.cell(row=row, column=col_pub_intimacao).fill = fill_duplicado
+      for col in range(1, ws_proc.max_column + 1):
+        ws_proc.cell(row=row, column=col).fill = fill_duplicado
     else:
       textos_processados_pub.append(corpo_pub)
 
