@@ -153,6 +153,13 @@ def processar_arquivo(caminho_arquivo):
         "status": status,
     })
 
+  # Índice por número de processo, para não varrer todo o RPA a cada
+  # publicação que já tem processo identificado
+  rpa_por_processo = {}
+  for rpa in rpa_dados:
+    if rpa["processo"]:
+      rpa_por_processo.setdefault(rpa["processo"], []).append(rpa)
+
   # Mapear Publicações pelos cabeçalhos (com fallback para o layout atual,
   # caso alguma coluna seja renomeada ou o cabeçalho não seja encontrado)
   pub_headers = {
@@ -216,22 +223,27 @@ def processar_arquivo(caminho_arquivo):
     melhor_prioridade = -1
     maior_score = -1.0
 
-    for rpa in rpa_dados:
-      mesmo_processo = proc_pub and (proc_pub == rpa["processo"])
-      sim = calcular_similaridade_palavras(corpo_pub, rpa["texto_limpo"])
-      prioridade = obter_peso_status(rpa["status"])
+    if proc_pub:
+      # Processo já identificado: consulta direta ao índice, em vez de
+      # varrer toda a base do RPA
+      for rpa in rpa_por_processo.get(proc_pub, []):
+        sim = calcular_similaridade_palavras(corpo_pub, rpa["texto_limpo"])
+        prioridade = obter_peso_status(rpa["status"])
 
-      # Prioriza status de sucesso, em caso de mesmo status, desempata pela similaridade e aceita registro mais recente
-      if mesmo_processo:
+        # Prioriza status de sucesso, em caso de mesmo status, desempata pela similaridade e aceita registro mais recente
         if prioridade > melhor_prioridade or (
             prioridade == melhor_prioridade and sim >= maior_score
         ):
           melhor_prioridade = prioridade
           maior_score = sim
           melhor_match = rpa
+    else:
+      # Contingência para publicação sem número de processo (apenas texto):
+      # não há chave para indexar, então a varredura completa é necessária
+      for rpa in rpa_dados:
+        sim = calcular_similaridade_palavras(corpo_pub, rpa["texto_limpo"])
+        prioridade = obter_peso_status(rpa["status"])
 
-      elif not proc_pub:
-        # Contingência para publicação sem número de processo (apenas texto)
         if sim >= LIMITE_SIMILARIDADE and (
             prioridade > melhor_prioridade
             or (prioridade == melhor_prioridade and sim >= maior_score)
